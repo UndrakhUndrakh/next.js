@@ -973,7 +973,13 @@ function createPendingCacheNode(
   }
 
   const maybePrefetchRsc = prefetchData !== null ? prefetchData[1] : null
-  const maybePrefetchLoading = prefetchData !== null ? prefetchData[3] : null
+  const loading =
+    prefetchData !== null
+      ? (prefetchData[3] ?? null)
+      : // We're navigating without a prefetch. We don't have a `loading` to display now,
+        // but we might get one from the dynamic response. We'll fulfill this promise
+        // when we receive that.
+        (createDeferredRsc() as Promise<LoadingModuleData>)
   return {
     lazyData: null,
     parallelRoutes: parallelRoutes,
@@ -984,7 +990,7 @@ function createPendingCacheNode(
     // TODO: Technically, a loading boundary could contain dynamic data. We must
     // have separate `loading` and `prefetchLoading` fields to handle this, like
     // we do for the segment data and head.
-    loading: maybePrefetchLoading !== undefined ? maybePrefetchLoading : null,
+    loading,
 
     // Create a deferred promise. This will be fulfilled once the dynamic
     // response is received from the server.
@@ -1069,6 +1075,14 @@ function finishPendingCacheNode(
       // implementation because we should have created a node for every
       // segment in the tree that's associated with this task.
     }
+  }
+
+  // If we navigated without a prefetch, then `loading` will be a deferred promise.
+  // Resolve it so that we can display the loading boundary.
+  const loading = cacheNode.loading
+  if (isDeferredRsc(loading)) {
+    const dynamicLoading = dynamicData[3]
+    loading.resolve(dynamicLoading)
   }
 
   // Use the dynamic data from the server to fulfill the deferred RSC promise
